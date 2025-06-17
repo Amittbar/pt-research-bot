@@ -35,7 +35,8 @@ GMAIL_APP_PASSWORD = "kmlrtwbcoiuwznqz"
 RECEIVER_EMAIL = "amittbar@gmail.com"
 # ============================
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def send_email(subject, body):
     print("[📤] Sending email...")
