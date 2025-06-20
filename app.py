@@ -1,3 +1,4 @@
+import traceback
 import requests
 import smtplib
 from datetime import date
@@ -163,6 +164,8 @@ def send_email(subject, body):
         print("✅ Email sent successfully!")
     except Exception as e:
         print(f"❌ Email failed: {e}")
+        import traceback
+        traceback.print_exc()
 
 def generate_and_send_summary():
     try:
