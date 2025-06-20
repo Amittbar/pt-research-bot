@@ -350,8 +350,12 @@ Abstract: {abstract}
 
         send_email(f"🧠 Meta-Analysis: {title}", email_body)
 
-    except Exception as e:
-        print(f"❌ Error: {e}")
+
+    import traceback
+
+except Exception as e:
+    print(f"❌ Error: {e}")
+    traceback.print_exc()
 
 # Schedule daily at 09:00 Israel time (06:00 UTC)
 schedule.every().day.at("06:00").do(generate_and_send_summary)
