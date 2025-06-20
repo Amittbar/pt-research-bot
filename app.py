@@ -36,6 +36,19 @@ def send_email(subject, body):
         print(f"❌ Email failed: {e}")
         traceback.print_exc()
 
+def verify_doi_link(doi):
+    if not doi:
+        return None
+    crossref_url = f"https://doi.org/{doi}"
+    try:
+        r = requests.get(crossref_url, allow_redirects=True, timeout=5)
+        if r.status_code in [200, 301, 302]:
+            print(f"[🔗] Verified DOI: {crossref_url}")
+            return crossref_url
+    except Exception as e:
+        print(f"[⚠️] DOI check failed: {e}")
+    return None
+
 def fetch_from_semantic_scholar():
     query = (
         '("exercise rehabilitation" OR "manual therapy" OR "injury prevention" OR '
@@ -67,7 +80,11 @@ def fetch_from_semantic_scholar():
 
     paper = sorted_papers[0]
     doi = paper.get("doi")
-    url = "https://doi.org/" + doi if doi else paper.get("url", "No link available.")
+    verified_link = verify_doi_link(doi)
+    fallback_link = paper.get("url", "No link available.")
+    url = verified_link if verified_link else fallback_link
+    if not verified_link:
+        print(f"[⚠️] Using fallback link: {url}")
 
     return {
         "title": paper["title"],
