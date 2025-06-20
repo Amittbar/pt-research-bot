@@ -1,10 +1,11 @@
-import traceback
 import requests
 import smtplib
 from datetime import date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from openai import OpenAI
+import traceback
+import os
 import schedule
 import time
 
@@ -164,7 +165,6 @@ def send_email(subject, body):
         print("✅ Email sent successfully!")
     except Exception as e:
         print(f"❌ Email failed: {e}")
-        import traceback
         traceback.print_exc()
 
 def generate_and_send_summary():
