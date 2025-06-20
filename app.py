@@ -358,6 +358,8 @@ schedule.every().day.at("06:00").do(generate_and_send_summary)
 
 print("⏳ Bot is live. A research summary will be emailed to you every day at 09:00 ILT.")
 
+generate_and_send_summary()
+
 while True:
     schedule.run_pending()
     time.sleep(60)
