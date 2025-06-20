@@ -1,6 +1,7 @@
 
 import requests
 import smtplib
+import random
 from datetime import date
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -36,18 +37,34 @@ def send_email(subject, body):
         print(f"❌ Email failed: {e}")
         traceback.print_exc()
 
-def verify_doi_link(doi):
-    if not doi:
-        return None
-    crossref_url = f"https://doi.org/{doi}"
+def fetch_scholarai_paper():
     try:
-        r = requests.get(crossref_url, allow_redirects=True, timeout=5)
-        if r.status_code in [200, 301, 302]:
-            print(f"[🔗] Verified DOI: {crossref_url}")
-            return crossref_url
+        url = "https://api.scholarai.io/api/searchAbstracts"
+        payload = {
+            "full_user_prompt": "search for meta-analyses related to physical therapy including exercise rehabilitation, manual therapy, surgical rehab, pain science, or return to play.",
+            "keywords": "physical therapy, meta-analysis, musculoskeletal rehabilitation, surgical rehab, pain science, return to play",
+            "sort": "publication_date",
+            "query": "meta-analysis AND (physical therapy OR exercise rehabilitation OR surgical rehab OR pain science OR return to play)",
+            "generative_mode": "true"
+        }
+        response = requests.post(url, json=payload)
+        papers = response.json().get("abstracts", [])
+        if not papers:
+            return None, None
+
+        paper = papers[0]
+        return {
+            "title": paper["title"],
+            "abstract": paper["abstract"],
+            "pmid": paper.get("doi", "N/A"),
+            "journal": paper.get("journal", "ScholarAI Source"),
+            "year": paper.get("publicationDate", "N/A")[:4],
+            "citations": paper.get("cited_by_count", "N/A"),
+            "source": "[ScholarAI]"
+        }, paper["landing_page_url"]
     except Exception as e:
-        print(f"[⚠️] DOI check failed: {e}")
-    return None
+        print(f"[⚠️] ScholarAI fetch failed: {e}")
+        return None, None
 
 def fetch_from_semantic_scholar():
     query = (
@@ -58,69 +75,49 @@ def fetch_from_semantic_scholar():
     )
     url = (
         "https://api.semanticscholar.org/graph/v1/paper/search"
-        "?query={}&limit=5&fields=title,abstract,url,doi,journal,year,authors,citationCount"
+        "?query={}&limit=20&fields=title,abstract,url,doi,journal,year,authors,citationCount"
     ).format(requests.utils.quote(query))
-    response = requests.get(url)
-    if response.status_code != 200:
-        return None
-    papers = response.json().get('data', [])
+    papers = []
+    for offset in range(0, 60, 20):
+        paginated_url = url + f"&offset={offset}"
+        response = requests.get(paginated_url)
+        if response.status_code == 200:
+            batch = response.json().get("data", [])
+            papers.extend(batch)
 
-    trusted_journals = [
-        "British Journal of Sports Medicine",
-        "Journal of Orthopaedic & Sports Physical Therapy",
-        "Physical Therapy",
-        "The Lancet",
-        "Sports Health"
-    ]
-    trusted = [p for p in papers if p.get("journal", {}).get("name", "") in trusted_journals]
-    sorted_papers = sorted(trusted if trusted else papers, key=lambda p: p.get("citationCount", 0), reverse=True)
+    valid_papers = [p for p in papers if p.get("abstract") and p.get("title")]
+    if not valid_papers:
+        return None, None
 
-    if not sorted_papers:
-        return None
-
-    paper = sorted_papers[0]
-    doi = paper.get("doi")
-    verified_link = verify_doi_link(doi)
-    fallback_link = paper.get("url", "No link available.")
-    url = verified_link if verified_link else fallback_link
-    if not verified_link:
-        print(f"[⚠️] Using fallback link: {url}")
-
+    selected = random.choice(valid_papers)
     return {
-        "title": paper["title"],
-        "abstract": paper.get("abstract", "No abstract available."),
-        "link": url,
-        "journal": paper.get("journal", {}).get("name", "Unknown journal"),
-        "year": paper.get("year", "N/A"),
-        "citations": paper.get("citationCount", "N/A")
-    }
-
-def fallback_to_scholarai():
-    return {
-        "title": "Prehabilitation for Orthopaedic Surgery: A Systematic Review",
-        "abstract": "Preoperative rehabilitation has been shown to improve post-surgical outcomes...",
-        "link": "https://doi.org/10.1136/bmjsem-2023-001234",
-        "journal": "BMJ Open Sport Exerc Med",
-        "year": "2023",
-        "citations": "245"
-    }
+        "title": selected["title"],
+        "abstract": selected.get("abstract", "No abstract available."),
+        "pmid": selected.get("doi", "N/A"),
+        "journal": selected.get("journal", {}).get("name", "Unknown journal"),
+        "year": selected.get("year", "N/A"),
+        "citations": selected.get("citationCount", "N/A"),
+        "source": "[Semantic Scholar]"
+    }, selected.get("url", "No URL")
 
 def generate_and_send_summary():
     try:
-        paper = fetch_from_semantic_scholar()
+        paper, url = fetch_scholarai_paper()
         if not paper:
-            print("[⚠️] Semantic Scholar failed. Using fallback from ScholarAI.")
-            paper = fallback_to_scholarai()
+            paper, url = fetch_from_semantic_scholar()
+        if not paper:
+            print("[❌] No paper available from any source.")
+            return
 
         title = paper["title"]
         abstract = paper["abstract"]
-        link = paper["link"]
+        pmid = paper["pmid"]
         journal = paper["journal"]
         year = paper["year"]
         citations = paper["citations"]
+        source = paper["source"]
 
-        print(f"[🎯] Selected paper: {title} ({journal}, {year}, {citations} citations)")
-        print(f"[🔗] Using link: {link}")
+        print(f"[📄] {title} | {journal} ({year}) | Citations: {citations} | PMID: {pmid} | Source: {source}")
 
         prompt = (
             "You're an AI assistant for musculoskeletal physiotherapists.\n"
@@ -145,7 +142,8 @@ def generate_and_send_summary():
         email_body = (
             f"📄 TITLE:\n{title}\n\n"
             f"📚 JOURNAL: {journal} ({year}) — {citations} citations\n\n"
-            f"🔗 LINK:\n{link}\n\n"
+            f"🆔 PMID / DOI: {pmid}\n\n"
+            f"📡 SOURCE: {source}\n\n"
             f"📝 SUMMARY:\n{summary}"
         )
 
@@ -155,11 +153,9 @@ def generate_and_send_summary():
         print(f"❌ Error: {e}")
         traceback.print_exc()
 
-# Schedule daily at 09:00 Israel time (06:00 UTC)
 schedule.every().day.at("06:00").do(generate_and_send_summary)
 
 print("⏳ Bot is live. A research summary will be emailed to you every day at 09:00 ILT.")
-
 generate_and_send_summary()
 
 while True:
