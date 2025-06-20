@@ -28,7 +28,7 @@ def send_email(subject, body):
     msg.attach(MIMEText(body, "plain"))
 
     try:
-        with smtplplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_ADDRESS, RECEIVER_EMAIL, msg.as_string())
         print("✅ Email sent successfully!")
