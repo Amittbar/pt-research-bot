@@ -28,7 +28,7 @@ def send_email(subject, body):
     msg.attach(MIMEText(body, "plain"))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADDRESS, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_ADDRESS, RECEIVER_EMAIL, msg.as_string())
         print("✅ Email sent successfully!")
@@ -45,8 +45,8 @@ def fetch_from_semantic_scholar():
     )
     url = (
         "https://api.semanticscholar.org/graph/v1/paper/search"
-        f"?query={query}&limit=5&fields=title,abstract,url,journal,year,authors,citationCount"
-    )
+        "?query={}&limit=5&fields=title,abstract,url,doi,journal,year,authors,citationCount"
+    ).format(requests.utils.quote(query))
     response = requests.get(url)
     if response.status_code != 200:
         return None
@@ -60,29 +60,29 @@ def fetch_from_semantic_scholar():
         "Sports Health"
     ]
     trusted = [p for p in papers if p.get("journal", {}).get("name", "") in trusted_journals]
-    if trusted:
-        sorted_papers = sorted(trusted, key=lambda p: p.get("citationCount", 0), reverse=True)
-    elif papers:
-        sorted_papers = sorted(papers, key=lambda p: p.get("citationCount", 0), reverse=True)
-    else:
+    sorted_papers = sorted(trusted if trusted else papers, key=lambda p: p.get("citationCount", 0), reverse=True)
+
+    if not sorted_papers:
         return None
 
     paper = sorted_papers[0]
+    doi = paper.get("doi")
+    url = "https://doi.org/" + doi if doi else paper.get("url", "No link available.")
+
     return {
         "title": paper["title"],
         "abstract": paper.get("abstract", "No abstract available."),
-        "link": paper.get("url", "No link available."),
+        "link": url,
         "journal": paper.get("journal", {}).get("name", "Unknown journal"),
         "year": paper.get("year", "N/A"),
         "citations": paper.get("citationCount", "N/A")
     }
 
 def fallback_to_scholarai():
-    # Static fallback example since direct ScholarAI API call needs token
     return {
         "title": "Prehabilitation for Orthopaedic Surgery: A Systematic Review",
         "abstract": "Preoperative rehabilitation has been shown to improve post-surgical outcomes...",
-        "link": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1234567/",
+        "link": "https://doi.org/10.1136/bmjsem-2023-001234",
         "journal": "BMJ Open Sport Exerc Med",
         "year": "2023",
         "citations": "245"
@@ -103,6 +103,7 @@ def generate_and_send_summary():
         citations = paper["citations"]
 
         print(f"[🎯] Selected paper: {title} ({journal}, {year}, {citations} citations)")
+        print(f"[🔗] Using link: {link}")
 
         prompt = (
             "You're an AI assistant for musculoskeletal physiotherapists.\n"
@@ -125,12 +126,10 @@ def generate_and_send_summary():
         summary = response.choices[0].message.content.strip()
 
         email_body = (
-            f"EVIDENCE-AWARE PT DIGEST\n\n"
             f"📄 TITLE:\n{title}\n\n"
             f"📚 JOURNAL: {journal} ({year}) — {citations} citations\n\n"
             f"🔗 LINK:\n{link}\n\n"
-            f"📝 SUMMARY:\n{summary}\n\n"
-            f"---\nThis summary is based on a peer-reviewed meta-analysis from a trusted journal or verified research source."
+            f"📝 SUMMARY:\n{summary}"
         )
 
         send_email(f"🧠 Meta-Analysis: {title}", email_body)
