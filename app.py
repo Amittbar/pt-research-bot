@@ -11,12 +11,10 @@ import os
 import schedule
 import time
 
-# === 🔐 YOUR CREDENTIALS ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GMAIL_ADDRESS = "amittbar@gmail.com"
 GMAIL_APP_PASSWORD = "kmlrtwbcoiuwznqz"
 RECEIVER_EMAIL = "amittbar@gmail.com"
-# ============================
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -154,9 +152,9 @@ def generate_and_send_summary():
         traceback.print_exc()
 
 schedule.every().day.at("06:00").do(generate_and_send_summary)
+generate_and_send_summary()
 
 print("⏳ Bot is live. A research summary will be emailed to you every day at 09:00 ILT.")
-generate_and_send_summary()
 
 while True:
     schedule.run_pending()
