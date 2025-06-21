@@ -11,15 +11,17 @@ import os
 import schedule
 import time
 
+# === 🔐 YOUR CREDENTIALS ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GMAIL_ADDRESS = "amittbar@gmail.com"
 GMAIL_APP_PASSWORD = "kmlrtwbcoiuwznqz"
 RECEIVER_EMAIL = "amittbar@gmail.com"
+# ============================
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 def send_email(subject, body):
-    print("[📤] Sending email...")
+    print("[📤] Preparing to send email...")
     msg = MIMEMultipart()
     msg["From"] = GMAIL_ADDRESS
     msg["To"] = RECEIVER_EMAIL
@@ -34,10 +36,10 @@ def send_email(subject, body):
     except Exception as e:
         print(f"❌ Email failed: {e}")
         traceback.print_exc()
-        print("[❌] FAILED!")
 
 def fetch_scholarai_paper():
     try:
+        print("[📥] Fetching paper from ScholarAI...")
         url = "https://api.scholarai.io/api/searchAbstracts"
         payload = {
             "full_user_prompt": "search for meta-analyses related to physical therapy including exercise rehabilitation, manual therapy, surgical rehab, pain science, or return to play.",
@@ -63,50 +65,56 @@ def fetch_scholarai_paper():
         }, paper["landing_page_url"]
     except Exception as e:
         print(f"[⚠️] ScholarAI fetch failed: {e}")
+        traceback.print_exc()
         return None, None
 
 def fetch_from_semantic_scholar():
-    query = (
-        '("exercise rehabilitation" OR "manual therapy" OR "injury prevention" OR '
-        '"return to play" OR "pain education" OR "load management" OR "musculoskeletal imaging" OR '
-        '"therapeutic modalities" OR "communication" OR "surgical rehabilitation" OR "assessment and diagnosis") '
-        'AND meta-analysis AND year:2022-2025'
-    )
-    url = (
-        "https://api.semanticscholar.org/graph/v1/paper/search"
-        "?query={}&limit=20&fields=title,abstract,url,doi,journal,year,authors,citationCount"
-    ).format(requests.utils.quote(query))
-    papers = []
-    for offset in range(0, 60, 20):
-        paginated_url = url + f"&offset={offset}"
-        response = requests.get(paginated_url)
-        if response.status_code == 200:
-            batch = response.json().get("data", [])
-            papers.extend(batch)
+    try:
+        print("[📥] Trying fallback: Semantic Scholar...")
+        query = (
+            '("exercise rehabilitation" OR "manual therapy" OR "injury prevention" OR '
+            '"return to play" OR "pain education" OR "load management" OR "musculoskeletal imaging" OR '
+            '"therapeutic modalities" OR "communication" OR "surgical rehabilitation" OR "assessment and diagnosis") '
+            'AND meta-analysis AND year:2022-2025'
+        )
+        url = (
+            "https://api.semanticscholar.org/graph/v1/paper/search"
+            "?query={}&limit=20&fields=title,abstract,url,doi,journal,year,authors,citationCount"
+        ).format(requests.utils.quote(query))
+        papers = []
+        for offset in range(0, 60, 20):
+            paginated_url = url + f"&offset={offset}"
+            response = requests.get(paginated_url)
+            if response.status_code == 200:
+                batch = response.json().get("data", [])
+                papers.extend(batch)
 
-    valid_papers = [p for p in papers if p.get("abstract") and p.get("title")]
-    if not valid_papers:
+        valid_papers = [p for p in papers if p.get("abstract") and p.get("title")]
+        if not valid_papers:
+            return None, None
+
+        selected = random.choice(valid_papers)
+        return {
+            "title": selected["title"],
+            "abstract": selected.get("abstract", "No abstract available."),
+            "pmid": selected.get("doi", "N/A"),
+            "journal": selected.get("journal", {}).get("name", "Unknown journal"),
+            "year": selected.get("year", "N/A"),
+            "citations": selected.get("citationCount", "N/A"),
+            "source": "[Semantic Scholar]"
+        }, selected.get("url", "No URL")
+    except Exception as e:
+        print(f"[⚠️] Semantic Scholar fetch failed: {e}")
+        traceback.print_exc()
         return None, None
 
-    selected = random.choice(valid_papers)
-    return {
-        "title": selected["title"],
-        "abstract": selected.get("abstract", "No abstract available."),
-        "pmid": selected.get("doi", "N/A"),
-        "journal": selected.get("journal", {}).get("name", "Unknown journal"),
-        "year": selected.get("year", "N/A"),
-        "citations": selected.get("citationCount", "N/A"),
-        "source": "[Semantic Scholar]"
-    }, selected.get("url", "No URL")
-
 def generate_and_send_summary():
-    print("[⏳ Bot is live... Trying to generate and send today's summary]")
+    print("[⏳] Starting daily summary generation...")
     try:
-        print("[📥] Fetching paper from ScholarAI...")
-    paper, url = fetch_scholarai_paper()
+        paper, url = fetch_scholarai_paper()
         if not paper:
-            print("[📥] ScholarAI failed. Trying Semantic Scholar...")
-        paper, url = fetch_from_semantic_scholar()
+            print("[🔁] ScholarAI failed, trying Semantic Scholar.")
+            paper, url = fetch_from_semantic_scholar()
         if not paper:
             print("[❌] No paper available from any source.")
             return
@@ -152,17 +160,16 @@ def generate_and_send_summary():
 
         print(f"[📤] Sending email to {RECEIVER_EMAIL}...")
         send_email(f"🧠 Meta-Analysis: {title}", email_body)
+        print("[✅] Summary email sent successfully!")
 
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[❌] Summary process failed: {e}")
         traceback.print_exc()
-        print("[❌] FAILED!")
 
 schedule.every().day.at("06:00").do(generate_and_send_summary)
 generate_and_send_summary()
 
-print("⏳ Bot is live. A research summary will be emailed to you every day at 09:00 ILT.")
-
+print("[🚀] Bot is live and scheduled.")
 while True:
     schedule.run_pending()
     time.sleep(60)
