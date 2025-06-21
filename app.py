@@ -34,6 +34,7 @@ def send_email(subject, body):
     except Exception as e:
         print(f"❌ Email failed: {e}")
         traceback.print_exc()
+        print("[❌] FAILED!")
 
 def fetch_scholarai_paper():
     try:
@@ -99,10 +100,13 @@ def fetch_from_semantic_scholar():
     }, selected.get("url", "No URL")
 
 def generate_and_send_summary():
+    print("[⏳ Bot is live... Trying to generate and send today's summary]")
     try:
-        paper, url = fetch_scholarai_paper()
+        print("[📥] Fetching paper from ScholarAI...")
+    paper, url = fetch_scholarai_paper()
         if not paper:
-            paper, url = fetch_from_semantic_scholar()
+            print("[📥] ScholarAI failed. Trying Semantic Scholar...")
+        paper, url = fetch_from_semantic_scholar()
         if not paper:
             print("[❌] No paper available from any source.")
             return
@@ -131,6 +135,7 @@ def generate_and_send_summary():
             f"Abstract: {abstract}"
         )
 
+        print("[🧠] Generating GPT summary...")
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}]
@@ -145,11 +150,13 @@ def generate_and_send_summary():
             f"📝 SUMMARY:\n{summary}"
         )
 
+        print(f"[📤] Sending email to {RECEIVER_EMAIL}...")
         send_email(f"🧠 Meta-Analysis: {title}", email_body)
 
     except Exception as e:
         print(f"❌ Error: {e}")
         traceback.print_exc()
+        print("[❌] FAILED!")
 
 schedule.every().day.at("06:00").do(generate_and_send_summary)
 generate_and_send_summary()
