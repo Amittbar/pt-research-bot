@@ -48,8 +48,16 @@ def fetch_scholarai_paper():
             "query": "meta-analysis AND (physical therapy OR exercise rehabilitation OR surgical rehab OR pain science OR return to play)",
             "generative_mode": "true"
         }
-        response = requests.post(url, json=payload)
-        papers = response.json().get("abstracts", [])
+                response = requests.post(url, json=payload)
+        if response.status_code != 200:
+            print(f"[❌] ScholarAI API error: {response.status_code}")
+            return None, None
+        try:
+            # handled above with try/except
+        except Exception as e:
+            print(f"[❌] Failed to decode ScholarAI JSON: {e}")
+            return None, None
+        # handled above with try/except
         if not papers:
             return None, None
 
